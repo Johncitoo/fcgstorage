@@ -2,11 +2,15 @@
 
 ## âœ… Checklist de ConfiguraciÃ³n
 
-### 1. Agregar PostgreSQL Database
-- [ ] En Railway Dashboard, click "New"
-- [ ] Seleccionar "Database" â†’ "Add PostgreSQL"
-- [ ] Esperar a que se cree (30 segundos aprox)
-- [ ] Verificar que aparece la variable `DATABASE_URL` en Variables
+### 1. Conectar a la Base de Datos Existente
+
+**IMPORTANTE:** Vamos a usar la MISMA base de datos del backend principal (fcgback).
+
+- [ ] En Railway Dashboard, ve al proyecto **fcgback**
+- [ ] Click en el servicio de **PostgreSQL**
+- [ ] Copia el valor de `DATABASE_URL` (Variables tab)
+- [ ] Ve al proyecto **fcgstorage**
+- [ ] Agrega manualmente la variable `DATABASE_URL` con el mismo valor
 
 ### 2. Configurar Variables de Entorno
 
@@ -25,8 +29,8 @@ PORT=3001
 NODE_ENV=production
 ```
 
-**Variables que Railway genera automÃ¡ticamente (NO las agregues):**
-- `DATABASE_URL` (viene del PostgreSQL addon)
+**Variable de Base de Datos:**
+- `DATABASE_URL` - Copiar del proyecto fcgback (misma BD compartida)
 
 ### 3. Verificar Deployment
 
@@ -88,3 +92,28 @@ Una vez que el servicio estÃ© funcionando:
 1. Copia la URL pÃºblica de Railway
 2. Ve al backend principal (fcgback)
 3. Sigue las instrucciones en `INTEGRATION.md`
+
+##  Ejecutar Migración de Base de Datos
+
+Una vez configurado `DATABASE_URL` en Railway:
+
+### Opción 1: Desde tu computadora local
+
+```bash
+# 1. Copiar DATABASE_URL del proyecto fcgback en Railway
+# 2. Agregar al .env local
+DATABASE_URL=postgresql://postgres:...
+
+# 3. Ejecutar migración
+node run-migration.js
+```
+
+### Opción 2: Ejecutar SQL directamente
+
+1. Ve al proyecto fcgback en Railway
+2. Click en PostgreSQL  "Data" tab
+3. Pega el contenido de `migrations/001_create_files_metadata.sql`
+4. Click "Execute"
+
+La tabla `files_metadata` se creará en la misma BD del backend principal.
+
