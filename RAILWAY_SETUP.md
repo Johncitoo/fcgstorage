@@ -21,8 +21,8 @@ Ve a tu servicio → "Variables" tab y agrega:
 API_KEY_MAIN=c3494e2a10724f4bb0ca8729f5cea62df651648ec1744361b12597b2a26d3070
 API_KEY_SECONDARY=1c1846ff65d84b8aa34a324bb5d191b66cf2f81de5f743eb954ca8c1456fec7b
 
-# CORS - URLs de tus apps
-CORS_ORIGINS=https://fundacion-carmen-goudie.vercel.app,https://fcgback-production.up.railway.app
+# CORS - SOLO Backend Principal (nunca frontend directo)
+CORS_ORIGINS=https://fcgback-production.up.railway.app
 
 # Puerto y Entorno
 PORT=3001
@@ -71,7 +71,7 @@ curl https://TU-URL.up.railway.app/health
 ✅ **Solución:** Verificar que `API_KEY_MAIN` esté configurada
 
 ### Error: "CORS policy"
-✅ **Solución:** Agregar URL del frontend/backend a `CORS_ORIGINS`
+✅ **Solución:** Agregar SOLO URL del backend principal a `CORS_ORIGINS`
 
 ## 📊 Estructura de BD
 
@@ -93,27 +93,28 @@ Una vez que el servicio esté funcionando:
 2. Ve al backend principal (fcgback)
 3. Sigue las instrucciones en `INTEGRATION.md`
 
-##  Ejecutar Migraci�n de Base de Datos
+##  Ejecutar Migraci�n de Base de Datos
 
 Una vez configurado `DATABASE_URL` en Railway:
 
-### Opci�n 1: Desde tu computadora local
+### Opci�n 1: Desde tu computadora local
 
 ```bash
 # 1. Copiar DATABASE_URL del proyecto fcgback en Railway
 # 2. Agregar al .env local
 DATABASE_URL=postgresql://postgres:...
 
-# 3. Ejecutar migraci�n
+# 3. Ejecutar migraci�n
 node run-migration.js
 ```
 
-### Opci�n 2: Ejecutar SQL directamente
+### Opci�n 2: Ejecutar SQL directamente
 
 1. Ve al proyecto fcgback en Railway
 2. Click en PostgreSQL  "Data" tab
 3. Pega el contenido de `migrations/001_create_files_metadata.sql`
 4. Click "Execute"
 
-La tabla `files_metadata` se crear� en la misma BD del backend principal.
+La tabla `files_metadata` se crear� en la misma BD del backend principal.
+
 
