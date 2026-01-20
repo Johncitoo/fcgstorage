@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { StorageModule } from './storage/storage.module';
@@ -20,6 +21,9 @@ import { StorageModule } from './storage/storage.module';
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
         synchronize: configService.get<string>('NODE_ENV') === 'development',
         logging: configService.get<string>('NODE_ENV') === 'development',
+        ssl: configService.get<string>('NODE_ENV') === 'production' 
+          ? { rejectUnauthorized: false } 
+          : false,
       }),
       inject: [ConfigService],
     }),
@@ -27,13 +31,20 @@ import { StorageModule } from './storage/storage.module';
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => [{
         ttl: parseInt(configService.get<string>('THROTTLE_TTL') || '60', 10) * 1000,
-        limit: parseInt(configService.get<string>('THROTTLE_LIMIT') || '10', 10),
+        limit: parseInt(configService.get<string>('THROTTLE_LIMIT') || '100', 10),
       }],
       inject: [ConfigService],
     }),
     StorageModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    // ThrottlerGuard global - aplica rate limiting a todos los endpoints
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule {}

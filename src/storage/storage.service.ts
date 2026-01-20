@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, InternalServerErrorException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
@@ -9,13 +9,50 @@ import { v4 as uuidv4 } from 'uuid';
 import { FileMetadata, FileCategory, EntityType } from './entities/file-metadata.entity';
 import { UploadFileDto } from './dto/upload-file.dto';
 
+// MIME types seguros por defecto
+const DEFAULT_ALLOWED_MIME_TYPES = [
+  // Imágenes
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/svg+xml',
+  // Documentos
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  // Texto
+  'text/plain',
+  'text/csv',
+  // Comprimidos (opcional, comentar si no se necesitan)
+  // 'application/zip',
+  // 'application/x-rar-compressed',
+];
+
+/**
+ * Servicio de almacenamiento de archivos.
+ * Gestiona la subida, descarga, listado y eliminación de archivos.
+ * Genera miniaturas automáticas para imágenes usando Sharp.
+ * @class StorageService
+ */
 @Injectable()
 export class StorageService {
+  private readonly logger = new Logger(StorageService.name);
+  /** Ruta base para almacenamiento de archivos */
   private readonly uploadPath: string;
+  /** Tamaño máximo de archivo permitido en bytes */
   private readonly maxFileSize: number;
+  /** Lista de tipos MIME permitidos */
   private readonly allowedMimeTypes: string[];
+  /** Ancho de miniaturas en píxeles */
   private readonly thumbnailWidth: number;
+  /** Alto de miniaturas en píxeles */
   private readonly thumbnailHeight: number;
+  /** Calidad de compresión JPEG para miniaturas (0-100) */
   private readonly thumbnailQuality: number;
 
   constructor(
@@ -25,14 +62,29 @@ export class StorageService {
   ) {
     this.uploadPath = this.configService.get<string>('UPLOAD_PATH') || './uploads';
     this.maxFileSize = parseInt(this.configService.get<string>('MAX_FILE_SIZE') || '10485760', 10);
-    this.allowedMimeTypes = this.configService.get<string>('ALLOWED_MIME_TYPES')?.split(',') || [];
+    
+    // Usar MIME types de config o los defaults seguros
+    const configMimeTypes = this.configService.get<string>('ALLOWED_MIME_TYPES');
+    this.allowedMimeTypes = configMimeTypes 
+      ? configMimeTypes.split(',').map(t => t.trim())
+      : DEFAULT_ALLOWED_MIME_TYPES;
+    
     this.thumbnailWidth = parseInt(this.configService.get<string>('THUMBNAIL_WIDTH') || '300', 10);
     this.thumbnailHeight = parseInt(this.configService.get<string>('THUMBNAIL_HEIGHT') || '300', 10);
     this.thumbnailQuality = parseInt(this.configService.get<string>('THUMBNAIL_QUALITY') || '80', 10);
     
+    this.logger.log(`📁 Upload path: ${this.uploadPath}`);
+    this.logger.log(`📄 Max file size: ${this.maxFileSize} bytes`);
+    this.logger.log(`✅ Allowed MIME types: ${this.allowedMimeTypes.length} types`);
+    
     this.ensureUploadDirectories();
   }
 
+  /**
+   * Asegura que existan los directorios necesarios para almacenamiento.
+   * Crea subdirectorios para profiles, documents, forms, thumbnails y temp.
+   * @private
+   */
   private async ensureUploadDirectories() {
     const directories = [
       this.uploadPath,
@@ -52,6 +104,15 @@ export class StorageService {
     }
   }
 
+  /**
+   * Sube un archivo al sistema de almacenamiento.
+   * Valida tamaño y tipo MIME, genera nombre único, guarda archivo y crea thumbnail si es imagen.
+   * @param file - Archivo de Express/Multer con buffer y metadata
+   * @param dto - DTO con metadatos adicionales (categoría, entidad, etc.)
+   * @returns Entidad FileMetadata con toda la información del archivo guardado
+   * @throws BadRequestException si el archivo excede el tamaño o tipo no permitido
+   * @throws InternalServerErrorException si falla el guardado
+   */
   async uploadFile(
     file: Express.Multer.File,
     dto: UploadFileDto,
@@ -114,6 +175,13 @@ export class StorageService {
     }
   }
 
+  /**
+   * Obtiene un archivo por su ID.
+   * Retorna tanto los metadatos como el contenido binario del archivo.
+   * @param id - UUID del archivo
+   * @returns Objeto con metadata y buffer del archivo
+   * @throws NotFoundException si el archivo no existe en BD o disco
+   */
   async getFile(id: string): Promise<{ metadata: FileMetadata; buffer: Buffer }> {
     const metadata = await this.fileMetadataRepository.findOne({
       where: { id, active: true },
@@ -133,6 +201,12 @@ export class StorageService {
     }
   }
 
+  /**
+   * Obtiene la miniatura de un archivo de imagen.
+   * @param id - UUID del archivo original
+   * @returns Objeto con metadata y buffer de la miniatura
+   * @throws NotFoundException si no existe miniatura para el archivo
+   */
   async getThumbnail(id: string): Promise<{ metadata: FileMetadata; buffer: Buffer }> {
     const metadata = await this.fileMetadataRepository.findOne({
       where: { id, active: true },
@@ -152,6 +226,12 @@ export class StorageService {
     }
   }
 
+  /**
+   * Elimina un archivo (soft delete).
+   * Marca el registro como inactivo sin eliminar el archivo físico.
+   * @param id - UUID del archivo a eliminar
+   * @throws NotFoundException si el archivo no existe
+   */
   async deleteFile(id: string): Promise<void> {
     const metadata = await this.fileMetadataRepository.findOne({
       where: { id, active: true },
@@ -175,6 +255,16 @@ export class StorageService {
     // } catch {}
   }
 
+  /**
+   * Lista archivos con filtros opcionales y paginación.
+   * @param category - Filtrar por categoría (PROFILE, DOCUMENT, etc.)
+   * @param entityType - Filtrar por tipo de entidad (USER, APPLICATION, etc.)
+   * @param entityId - Filtrar por ID de entidad específica
+   * @param uploadedBy - Filtrar por usuario que subió el archivo
+   * @param limit - Máximo de resultados (default: 50)
+   * @param offset - Registros a saltar para paginación (default: 0)
+   * @returns Objeto con array de archivos y total
+   */
   async listFiles(
     category?: FileCategory,
     entityType?: EntityType,
@@ -211,6 +301,12 @@ export class StorageService {
     return { data, total };
   }
 
+  /**
+   * Obtiene solo los metadatos de un archivo sin el contenido.
+   * @param id - UUID del archivo
+   * @returns Entidad FileMetadata completa
+   * @throws NotFoundException si el archivo no existe
+   */
   async getFileMetadata(id: string): Promise<FileMetadata> {
     const metadata = await this.fileMetadataRepository.findOne({
       where: { id, active: true },
@@ -223,6 +319,12 @@ export class StorageService {
     return metadata;
   }
 
+  /**
+   * Determina el subdirectorio de almacenamiento según la categoría.
+   * @param category - Categoría del archivo
+   * @returns Nombre del subdirectorio (profiles, documents, forms o temp)
+   * @private
+   */
   private getSubdirectoryByCategory(category: FileCategory): string {
     switch (category) {
       case FileCategory.PROFILE:
@@ -236,6 +338,14 @@ export class StorageService {
     }
   }
 
+  /**
+   * Genera una miniatura para una imagen.
+   * Usa Sharp para redimensionar y comprimir a JPEG.
+   * @param buffer - Buffer de la imagen original
+   * @param filename - Nombre del archivo para generar nombre de thumbnail
+   * @returns Ruta relativa del thumbnail o null si falla
+   * @private
+   */
   private async generateThumbnail(buffer: Buffer, filename: string): Promise<string | null> {
     try {
       const thumbnailFilename = `thumb_${filename}`;
@@ -257,7 +367,11 @@ export class StorageService {
     }
   }
 
-  // Cleanup orphaned files (files in DB but not on disk, or vice versa)
+  /**
+   * Limpia archivos huérfanos del sistema.
+   * Busca registros en BD sin archivo físico y los marca como inactivos.
+   * @returns Objeto con cantidad de archivos removidos
+   */
   async cleanupOrphanedFiles(): Promise<{ removed: number }> {
     const allMetadata = await this.fileMetadataRepository.find();
     let removed = 0;
