@@ -21,9 +21,8 @@ import { StorageModule } from './storage/storage.module';
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
         synchronize: configService.get<string>('NODE_ENV') === 'development',
         logging: configService.get<string>('NODE_ENV') === 'development',
-        ssl: configService.get<string>('NODE_ENV') === 'production' 
-          ? { rejectUnauthorized: false } 
-          : false,
+        // Disable SSL for localhost connections (cPanel environment)
+        ssl: false,
       }),
       inject: [ConfigService],
     }),
