@@ -62,11 +62,11 @@ export class FileMetadata {
   }
 
   /** Nombre original del archivo subido por el usuario */
-  @Column({ type: 'varchar', length: 500 })
+  @Column({ type: 'varchar', length: 500, name: 'original_filename' })
   originalFilename: string;
 
   /** Nombre único generado para almacenamiento interno */
-  @Column({ type: 'varchar', length: 500, unique: true })
+  @Column({ type: 'varchar', length: 500, unique: true, name: 'stored_filename' })
   storedFilename: string;
 
   /** Tipo MIME del archivo (image/jpeg, application/pdf, etc.) */
@@ -90,11 +90,12 @@ export class FileMetadata {
     type: 'enum',
     enum: EntityType,
     nullable: true,
+    name: 'entity_type',
   })
   entityType: EntityType;
 
   /** ID de la entidad asociada (opcional) */
-  @Column({ type: 'uuid', nullable: true })
+  @Column({ type: 'uuid', nullable: true, name: 'entity_id' })
   entityId: string;
 
   /** Ruta relativa del archivo en el sistema de almacenamiento */
@@ -102,11 +103,11 @@ export class FileMetadata {
   path: string;
 
   /** Ruta relativa de la miniatura (solo para imágenes) */
-  @Column({ type: 'varchar', length: 500, nullable: true })
+  @Column({ type: 'varchar', length: 500, nullable: true, name: 'thumbnail_path' })
   thumbnailPath: string;
 
   /** ID del usuario que subió el archivo */
-  @Column({ type: 'uuid', nullable: true })
+  @Column({ type: 'uuid', nullable: true, name: 'uploaded_by' })
   uploadedBy: string;
 
   /** Descripción opcional del archivo */
@@ -118,11 +119,11 @@ export class FileMetadata {
   metadata: Record<string, any>;
 
   /** Fecha y hora de subida */
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'uploaded_at' })
   uploadedAt: Date;
 
   /** Fecha y hora de última actualización */
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 
   /** Indica si el archivo está activo (false = soft deleted) */
