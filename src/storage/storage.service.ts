@@ -117,6 +117,9 @@ export class StorageService {
     file: Express.Multer.File,
     dto: UploadFileDto,
   ): Promise<FileMetadata> {
+    this.logger.log(`📤 Upload request: ${file.originalname} (${file.size} bytes, ${file.mimetype})`);
+    this.logger.log(`📦 Category: ${dto.category}, Entity: ${dto.entityType}/${dto.entityId}`);
+    
     // Validate file size
     if (file.size > this.maxFileSize) {
       throw new BadRequestException(`File size exceeds maximum allowed size of ${this.maxFileSize} bytes`);
@@ -166,12 +169,16 @@ export class StorageService {
       const saved = await this.fileMetadataRepository.save(fileMetadata);
       return saved;
     } catch (error) {
+      // Log the actual error for debugging
+      this.logger.error(`❌ Upload failed: ${error.message}`);
+      this.logger.error(`Stack trace: ${error.stack}`);
+      
       // Cleanup file if database save fails
       try {
         await fs.unlink(fullPath);
       } catch {}
       
-      throw new InternalServerErrorException('Failed to upload file');
+      throw new InternalServerErrorException(`Failed to upload file: ${error.message}`);
     }
   }
 
